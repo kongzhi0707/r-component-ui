@@ -1,14 +1,27 @@
+/.vscode
 
 # dependencies
 /node_modules
 /.pnp
 .pnp.js
 
+/site
 # testing
 /coverage
 
 # production
 /build
+/dist
+/lib
+/esm
+/doc-site
+/types
+
+# umi
+.umi
+.umi-production
+.env.local
+
 
 # misc
 .DS_Store
