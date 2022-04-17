@@ -302,11 +302,11 @@ group:
 ```
 我们在项目的根目录中 运行 yarn dev 后，我们访问 http://localhost:8000/ 后看到如下界面：
 
-如图1
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/1.png"/>
 
 当我们点击导航的组件，可以看到 Alert 组件对应的文档，如下图所示：
 
-如图2
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/2.png"/>
 
 如上看到 <code src="./demo/basic.tsx"></code> 将我们编写的组件渲染到了 markdown 页面中，当然我们还有其他的方式，我们可以参考 <a href="https://d.umijs.org/zh-CN/guide/basic#%E5%86%99%E7%BB%84%E4%BB%B6-demo">dumi 文档</a>
 
@@ -324,7 +324,7 @@ src/alert/index.md 添加如下代码：
 ```
 然后在页面上显示如下：
 
-如图3
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/3.png"/>
 
 ##### 自动补全
 
@@ -370,7 +370,7 @@ group:
 ```
 效果如下：
 
-如图4
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/4.png"/>
 
 #### 部署文档站点
 
@@ -397,11 +397,11 @@ export default defineConfig({
 在 base 和 publicPath 未改之前，当我们 运行 yarn run preview:site 后，也是会重启一个服务器的，我们可以访问 http://localhost:3000/ 也是可以
 访问到的，如下效果：
 
-如图5
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/5.png"/>
 
 在我们的项目根目录下会生成 doc-site 文件夹。是因为我上面的 .umirc.ts 配置文件 outputPath 指定为 doc-site, 有对应的文件。如下：
 
-如图6
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/6.png"/>
 
 但是当我把 base 和 publicPath ，如下这个配置加上 再 运行 yarn run preview:site 运行后，就访问不了。
 
