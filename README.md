@@ -111,12 +111,15 @@ yarn add typescript --dev
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noImplicitAny": false
   },
   "include": ["src", "typings.d.ts"],
   "exclude": ["node_modules"]
 }
 ```
+#### 注意：上面配置一定要加上 "noImplicitAny": false，否则在编译打包的时候会报错，会报类似的错误：Could not find a declaration file for module 'history'。
+
 ##### 新增组件
 
 在 src 文件夹下 新建 alert 文件夹，目录结构如下：
@@ -487,6 +490,154 @@ jobs:
           github_token: ${{ secrets.ACCESS_TOKEN }}
           publish_dir: ./doc-site
 ```
+
+#### 三：编译打包
+
+需要做如下事情：
+```
+1）导出类型声明文件；
+2）导出 UMD/CommonJS module / ES module 等3种形式产物供使用者引入；
+3）支持样式文件 css 引入，而不仅仅是 less。
+4）支持按需加载
+```
+#### 3.1）导出类型声明文件
+
+我们可以生成类型声明文件，在 package.json 中定义入口，package.json 代码如下：
+```
+{
+  "typings": "lib/index.d.ts", // 定义类型入口文件
+  "scripts": {
+    "build:types": "tsc -p tsconfig.build.json && cpr lib esm" // 执行tsc命令生成类型声明文件
+  }
+}
+```
+因此我们需要安装 cpr ， 如下命令：
+```
+yarn add cpr -D
+```
+如上是使用 cpr 将 lib 的声明文件拷贝了一份，并将文件夹重命名为 esm，用于后面存放 ES module 形式的组件。
+
+#### tsconfig.build.json
+```
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "emitDeclarationOnly": true }, // 只生成声明文件
+  "exclude": ["**/__tests__/**", "**/demo/**", "node_modules", "lib", "esm"] // 排除示例、测试以及打包好的文件夹
+}
+```
+当我们执行 yarn build:types 命令时，根目录下会生成 lib 文件夹 (tsconfig.json 中定义的 declarationDir 字段) 及 esm 文件夹拷贝过来的。目录结构
+和 src 文件夹保持一致。
+```
+yarn build:types
+```
+然后在项目的根目录会生成 lib 文件夹。如下结构：
+```
+|---lib
+| |--- index.d.ts
+| |--- alert
+| | |--- index.d.ts
+| | |--- style
+| | | |--- index.d.ts
+```
+接下来我们需要将 ts(x) 等文件处理成 js 文件。
+
+#### 导出 Commonjs 模块
+
+#### babel 配置
+
+首先安装babel及其相关依赖：
+```
+yarn add @babel/core @babel/preset-env @babel/preset-react @babel/preset-typescript @babel/plugin-proposal-class-properties  @babel/plugin-transform-runtime --dev
+
+yarn add @babel/runtime
+```
+再在项目的根目录下 新建 .babelrc.js 文件，写入如下配置代码：
+```
+module.exports = {
+  presets: ['@babel/env', '@babel/typescript', '@babel/react'],
+  plugins: ['@babel/plugin-transform-runtime', '@babel/proposal-class-properties'],
+};
+```
+#### 配置目标环境
+
+为了避免转译浏览器原生支持的语法，新建 .browserslistrc文件, 根据适配的要求，写入支持浏览器范围，作用于@babel/preset-env。
+
+.browserslistrc 文件代码如下：
+```
+>0.2%
+not dead
+not op_mini all
+```
+#### gulp 配置
+
+安装gulp相关的依赖 
+```
+yarn add gulp gulp-babel --dev
+```
+在项目的根目录下新建 gulpfile.js 文件，写入以下内容：
+```
+const gulp = require('gulp');
+const babel = require('gulp-babel');
+
+const paths = {
+  dest: {
+    lib: 'lib', // commonjs 文件存放的目录名 - 本块关注
+    esm: 'esm', // ES module 文件存放的目录名 - 暂时不关心
+    dist: 'dist', // umd文件存放的目录名 - 暂时不关心
+  },
+  styles: 'src/**/*.less', // 样式文件路径 - 暂时不关心
+  scripts: ['src/**/*.{ts,tsx}', '!src/**/demo/*.{ts,tsx}'], // 脚本文件路径
+};
+
+function compileCJS() {
+  const { dest, scripts } = paths;
+  return gulp
+    .src(scripts)
+    .pipe(babel()) // 使用gulp-babel处理
+    .pipe(gulp.dest(dest.lib));
+}
+
+// 并行任务 后续加入样式处理 可以并行处理
+const build = gulp.parallel(compileCJS);
+
+exports.build = build;
+
+exports.default = build;
+```
+package.json 改为如下：
+```
+{
+  - "main": "index.js",
+  + "main": "lib/index.js",
+    "scripts": {
+      ...
+      "clean": "rimraf lib esm dist",
+      "build": "npm run clean && npm run build:types && gulp",
+    }
+}
+```
+当我们运行 yarn build 命令，就会得到如下内容：
+```
+|--- lib
+| |--- alert
+| | |--- style
+| | | |--- index.js
+| | | |--- index.d.ts
+| | |--- index.js
+| | |--- index.d.ts
+| |--- index.js
+| |--- index.d.ts
+```
+#### 导出 ES module
+
+
+
+
+
+
+
+
+
 
 
 

@@ -20,9 +20,9 @@ const kinds: KindMap = {
   warning: '#FFA502',
 };
 
-const Alert: React.FC<AlertProps> = ({ children, kind = 'info', ...rest }) => (
+const Alert: React.FC<AlertProps> = ({ kind = 'info', ...rest }) => (
   <div className={prefixCls} style={{ background: kinds[kind] }} {...rest}>
-    {children}
+    
   </div>
 );
 
