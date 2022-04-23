@@ -630,6 +630,415 @@ package.json 改为如下：
 ```
 #### 导出 ES module
 
+生成 ES module 可以更好的进行 tree shaking。因此我们的babel配置改成如下：
+
+1）配置 @babel/preset-env 的 modules 选项为 false，关闭模块转换。
+2）配置 @babel/plugin-transform-runtime的 useESModules 选项为true， 使用 ES module 形式引入helper函数。
+
+#### .babelrc.js 配置如下：
+```
+module.exports = {
+  presets: ['@babel/env', '@babel/typescript', '@babel/react'],
+  plugins: ['@babel/plugin-transform-runtime', '@babel/proposal-class-properties'],
+  // 使用环境变量来区分 esm 和 cjs (执行任务时设置对应的环境变量即可)
+  env: {
+    esm: {
+      presets: [
+        [
+          '@babel/env',
+          {
+            modules: false,
+          }
+        ],
+      ],
+      plugins: [
+        [
+          '@babel/plugin-transform-runtime',
+          {
+            useESModules: true,
+          },
+        ]
+      ]
+    }
+  }
+};
+```
+然后我们需要修改 gulp 相关的配置，抽离 compileScripts 任务， 增加 compileESM 的任务。
+
+#### gulpfile.js 配置更新如下：
+```
+const gulp = require('gulp');
+const babel = require('gulp-babel');
+
+const paths = {
+  dest: {
+    lib: 'lib', // commonjs 文件存放的目录名 - 本块关注
+    esm: 'esm', // ES module 文件存放的目录名 - 暂时不关心
+    dist: 'dist', // umd文件存放的目录名 - 暂时不关心
+  },
+  styles: 'src/**/*.less', // 样式文件路径 - 暂时不关心
+  scripts: ['src/**/*.{ts,tsx}', '!src/**/demo/*.{ts,tsx}'], // 脚本文件路径
+};
+
+/**
+ * 编译脚本文件
+ * @param { string } babelEnv babel 环境变量
+ * @param { string } destDir 目标目录
+ */
+function compileScripts(babelEnv, destDir) {
+  const { scripts } = paths;
+  // 设置环境变量
+  process.env.BABEL_ENV = babelEnv;
+  return gulp
+    .src(scripts)
+    .pipe(babel()) // 使用gulp-babel处理
+    .pipe(gulp.dest(destDir));
+}
+
+/**
+ * 编译cjs
+ */
+function compileCJS() {
+  const { dest } = paths;
+  return compileScripts('cjs', dest.lib);
+}
+
+/**
+ * 编译 esm
+ */
+function compileESM() {
+  const { dest } = paths;
+  return compileScripts('esm', dest.esm);
+}
+
+// 串行执行编译脚本任务 (cjs, esm) 避免环境变量影响
+const buildScripts = gulp.series(compileCJS, compileESM);
+
+// 整体并行执行任务
+const build = gulp.parallel(buildScripts);
+
+exports.build = build;
+
+exports.default = build;
+```
+在项目的根目录下 执行 yarn build, 可以发现生成了 lib/esm 两个文件夹， esm目录结构和lib结构一致。js文件都是以 ES module 模块形式导入导出。
+
+如下效果：
+
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/7.png"/>
+
+我们可以来对比下代码：
+
+#### esm/alert/index.js 代码如下：
+```
+import _extends from "@babel/runtime/helpers/esm/extends";
+import _objectWithoutProperties from "@babel/runtime/helpers/esm/objectWithoutProperties";
+var _excluded = ["kind"];
+import React from 'react';
+import t from 'prop-types';
+var prefixCls = 'happy-alert';
+var kinds = {
+  info: '#5352ED',
+  positive: '#2ED573',
+  negative: '#FF4757',
+  warning: '#FFA502'
+};
+
+var Alert = function Alert(_ref) {
+  var _ref$kind = _ref.kind,
+      kind = _ref$kind === void 0 ? 'info' : _ref$kind,
+      rest = _objectWithoutProperties(_ref, _excluded);
+
+  return /*#__PURE__*/React.createElement("div", _extends({
+    className: prefixCls,
+    style: {
+      background: kinds[kind]
+    }
+  }, rest));
+};
+
+Alert.propTypes = {
+  kind: t.oneOf(['info', 'positive', 'negative', 'warning'])
+};
+export default Alert;
+```
+#### lib/alert/index.js 代码如下：
+```
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault");
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _extends2 = _interopRequireDefault(require("@babel/runtime/helpers/extends"));
+
+var _objectWithoutProperties2 = _interopRequireDefault(require("@babel/runtime/helpers/objectWithoutProperties"));
+
+var _react = _interopRequireDefault(require("react"));
+
+var _propTypes = _interopRequireDefault(require("prop-types"));
+
+var _excluded = ["kind"];
+var prefixCls = 'happy-alert';
+var kinds = {
+  info: '#5352ED',
+  positive: '#2ED573',
+  negative: '#FF4757',
+  warning: '#FFA502'
+};
+
+var Alert = function Alert(_ref) {
+  var _ref$kind = _ref.kind,
+      kind = _ref$kind === void 0 ? 'info' : _ref$kind,
+      rest = (0, _objectWithoutProperties2.default)(_ref, _excluded);
+  return /*#__PURE__*/_react.default.createElement("div", (0, _extends2.default)({
+    className: prefixCls,
+    style: {
+      background: kinds[kind]
+    }
+  }, rest));
+};
+
+Alert.propTypes = {
+  kind: _propTypes.default.oneOf(['info', 'positive', 'negative', 'warning'])
+};
+var _default = Alert;
+exports.default = _default;
+```
+#### package.json 添加入口
+
+最后我们需要给 package.json 增加入口，
+```
+{
+  "module": "esm/index.js"
+}
+```
+#### 处理样式文件
+
+##### 拷贝 less 文件
+
+我们会将less文件包含在npm包中，用户可以通过 r-component-ui/lib/alert/style/index.js 的形式按需引入 less 文件。 我们也可以直接将less文件拷贝至目标文件夹中。
+
+在 gulpfile.js 中新建 copyLess 任务。
+
+##### gulpfile.js
+```
+// ....
+
+/**
+ * 拷贝less文件
+ */
+function copyLess() {
+  return gulp.src(paths.styles).pipe(gulp.dest(paths.dest.lib)).pipe(gulp.dest(paths.dest.esm));
+}
+
+const build = gulp.parallel(buildScripts, copyLess);
+
+// ....
+```
+我们接着 再执行 yarn build 命令 生成 esm 和 lib 目录， 我们可以发现 less 文件 被拷贝到 alert/style 目录下了。 如下图所示：
+
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/8.png"/>
+
+如上我们的组件生成了less文件，但是如果我们的项目并没有使用less预处理器，而是使用了sass预处理器或styuls预处理器的话，那么我们在项目中直接引入less样式是会报错的。因此我们需要有方案去解决该问题。
+
+一般有如下几种方案解决：
+```
+1）告知使用方 项目增加 less-loader，但是这样做的话 会导致使用成本增加。
+2）打包出一份完成的css文件，进行全量引入。但是缺点是：无法进行按需引入。
+3）css in js 方案。
+4）提供一份 style/css.js 文件，引入组件css样式依赖，而非less 依赖。组件库底层抹平差异。
+```
+我们可以来看下第三种和第四种方案，
+
+第三种方案 css in js 方案使用的是 styled-components，请看 <a href="">css in js 这篇文章</a>
+
+缺点：
+```
+1）样式无法单独缓存。
+2）styled-components 自身体积比较大
+3）复写组件样式需要使用属性选择器或使用 styled-components 自带方法。
+```
+第四种方案，antd也是使用这种方案。
+
+就是在我们组件下生成 alert/style/index.js 引入less文件 ，且 打包组件后在 alert/style.css 文件。这样做的目的是 管理样式依赖。
+
+因为我们的组件是没有引入样式文件的，需要我们手动去引入。比如当我们引入 <Button />组件，<Button /> 依赖了 <Icon />组件，我们就需要手动引入<Button />组件的样式，且还需要手动引入  <Icon />组件的样式，如果我们遇到复杂的组件就比较麻烦，因此我们开发组件库的人就需要提供这样一份js文件。当我们使用者手动引入该
+js组件库的时候，我们就应该自动引入对应的样式文件。
+
+因此它的优点是：
+```
+1）减轻使用者的使用成本。
+2）保障组件库的开发体验。
+```
+因此我们需要在组件，比如 alert/style 目录下 提供一份 css.js文件，引入的组件是css样式文件的依赖。
+
+#### 生成css文件
+
+安装相关的依赖：
+```
+yarn add gulp-less gulp-autoprefixer gulp-cssnano --dev
+```
+将less文件生成对应的css的文件，在 gulpfile.js 中增加 less2css 任务。
+```
+// ....
+
+const less = require('gulp-less');
+const autoprefixer = require('gulp-autoprefixer');
+const cssnano = require('gulp-cssnano');
+
+// .....
+
+/**
+ * 生成css文件
+ */
+
+function less2css() {
+  return gulp
+    .src(paths.styles)
+    .pipe(less()) // 处理less文件
+    .pipe(autoprefixer()) // 根据browserslistrc增加前缀
+    .pipe(cssnano({ zindex: false, reduceIdents: false })) // 压缩
+    .pipe(gulp.dest(paths.dest.lib))
+    .pipe(gulp.dest(paths.dest.esm));
+}
+
+const build = gulp.parallel(buildScripts, copyLess, less2css);
+
+// .....
+```
+然后我们再执行 yarn build 命令后，我们的组件 style 目录已经存在css文件了， 如下所示：
+
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/9.png"/>
+
+接下来我们需要一个alert/style/css.js来帮用户引入css文件。
+
+#### 生成 css.js
+
+在处理 scripts 任务中，截住 style/index.js, 生成 style/css.js ， 并且通过正则引入的 less 文件 后缀改成css文件。
+
+安装相关的依赖如下：
+```
+yarn add through2 --dev
+```
+##### gulpfile.js 配置代码所有的如下：
+```
+const gulp = require('gulp');
+const babel = require('gulp-babel');
+
+const less = require('gulp-less');
+const autoprefixer = require('gulp-autoprefixer');
+const cssnano = require('gulp-cssnano');
+const through2 = require('through2');
+
+const paths = {
+  dest: {
+    lib: 'lib', // commonjs 文件存放的目录名 - 本块关注
+    esm: 'esm', // ES module 文件存放的目录名 - 暂时不关心
+    dist: 'dist', // umd文件存放的目录名 - 暂时不关心
+  },
+  styles: 'src/**/*.less', // 样式文件路径 - 暂时不关心
+  scripts: ['src/**/*.{ts,tsx}', '!src/**/demo/*.{ts,tsx}'], // 脚本文件路径
+};
+
+/**
+ * 当前组件样式 import './index.less' => import './index.css'
+ * 依赖的其他组件样式 import '../test-comp/style' => import '../test-comp/style/css.js'
+ * 依赖的其他组件样式 import '../test-comp/style/index.js' => import '../test-comp/style/css.js'
+ * @param {string} content
+ */
+ function cssInjection(content) {
+  return content
+    .replace(/\/style\/?'/g, "/style/css'")
+    .replace(/\/style\/?"/g, '/style/css"')
+    .replace(/\.less/g, '.css');
+}
+
+/**
+ * 编译脚本文件
+ * @param { string } babelEnv babel 环境变量
+ * @param { string } destDir 目标目录
+ */
+function compileScripts(babelEnv, destDir) {
+  const { scripts } = paths;
+  // 设置环境变量
+  process.env.BABEL_ENV = babelEnv;
+  return gulp
+    .src(scripts)
+    .pipe(babel()) // 使用gulp-babel处理
+    .pipe(
+      through2.obj(function z(file, encoding, next) {
+        this.push(file.clone());
+        // 找到目标
+        if (file.path.match(/(\/|\\)style(\/|\\)index\.js/)) {
+          const content = file.contents.toString(encoding);
+          file.contents = Buffer.from(cssInjection(content)); // 文件内容处理
+          file.path = file.path.replace(/index\.js/, 'css.js'); // 文件重命名
+          this.push(file); // 新增该文件
+          next();
+        } else {
+          next();
+        }
+      })
+    )
+    .pipe(gulp.dest(destDir));
+}
+
+/**
+ * 编译cjs
+ */
+function compileCJS() {
+  const { dest } = paths;
+  return compileScripts('cjs', dest.lib);
+}
+
+/**
+ * 编译 esm
+ */
+function compileESM() {
+  const { dest } = paths;
+  return compileScripts('esm', dest.esm);
+}
+
+/**
+ * 拷贝less文件
+ */
+function copyLess() {
+  return gulp.src(paths.styles).pipe(gulp.dest(paths.dest.lib)).pipe(gulp.dest(paths.dest.esm));
+}
+
+/**
+ * 生成css文件
+ */
+
+function less2css() {
+  return gulp
+    .src(paths.styles)
+    .pipe(less()) // 处理less文件
+    .pipe(autoprefixer()) // 根据browserslistrc增加前缀
+    .pipe(cssnano({ zindex: false, reduceIdents: false })) // 压缩
+    .pipe(gulp.dest(paths.dest.lib))
+    .pipe(gulp.dest(paths.dest.esm));
+}
+
+// 串行执行编译脚本任务 (cjs, esm) 避免环境变量影响
+const buildScripts = gulp.series(compileCJS, compileESM);
+
+// 整体并行执行任务
+const build = gulp.parallel(buildScripts, copyLess, less2css);
+
+exports.build = build;
+
+exports.default = build;
+```
+因此我们在执行 yarn build 进行打包后，可以看见组件 style 目录下生成了 css.js 文件，如下所示：
+
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/10.png"/>
+
+#### 按需加载
 
 
 
