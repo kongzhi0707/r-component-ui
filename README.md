@@ -1040,7 +1040,55 @@ exports.default = build;
 
 #### 按需加载
 
+我们可以借助 babel-plugin-import  插件来实现按需加载，我们可以演示下，将组件映射到本地库，在我们的组件的项目根目录下执行：
+```
+yarn link
+```
+运行完成后，在 yarn 的link文件夹下会有一个文件的快捷键映射。
 
+2）我们新建一个项目，比如叫 react-demo
+```
+使用命令：npx create-react-app react-demo
+```
+react-demo 下载完成后，在该项目下根目录执行：
+```
+yarn link r-component-ui
+```
+3) 安装 babel-plugin-import 依赖，命令如下：
+```
+npm install babel-plugin-import -D
+```
+4）配置 .babelrc
+
+在react-demo项目的根目录下新建 .babelrc 文件，添加如下配置：
+```
+{
+  "plugins": [
+    ["import", { 
+      "libraryName": "r-component-ui",
+      "libraryDirectory": "lib",  // libraryDirectory 默认为 lib
+      "style": "css"
+    }]
+  ]
+}
+```
+5） 调用
+
+在 react-demo/src/App.js 文件下引入 组件 r-component-ui
+```
+import { Alert } from 'r-component-ui';
+
+console.log('---Alert---', Alert);
+
+// ....
+
+<Alert /> // 调用组件
+
+// ....
+```
+如下，可以看到我们的组件被引用到了 ，如下所示：
+
+<img src="https://raw.githubusercontent.com/kongzhi0707/r-component-ui/master/images/11.png"/>
 
 
 
